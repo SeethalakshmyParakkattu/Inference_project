@@ -1,0 +1,344 @@
+---
+title: "linear"
+author: "Seethalakshmy Parakkattu Mani_T00728975"
+date: "2024-04-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Load the dataset
+data <- read.csv("D:\\housing.csv")
+
+# Remove categorical values (assuming categorical values are stored as factors)
+data <- data %>% select_if(~ !is.factor(.))
+
+# Remove last column
+data <- data[, -ncol(data)]
+
+# Remove first two columns
+data <- data[, -c(1, 2)]
+
+# Remove null values
+data <- na.omit(data)
+
+# Display the structure of the modified dataset
+str(data)
+```
+
+
+```{r}
+# Split data into training and testing sets
+set.seed(123)
+train_indices <- sample(1:nrow(data), 0.8 * nrow(data), replace = FALSE)
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+# Extract the response and predictors
+Y <- train_data$median_house_value
+X <- data.matrix(train_data[, -which(names(data) == "median_house_value")])  # Exclude the response variable
+X <- scale(X)  # Standardize the predictors
+
+# Add the intercept term
+X <- cbind(rep(1, nrow(X)), X)
+
+# Calculate OLS estimates
+beta <- solve(t(X) %*% X) %*% t(X) %*% Y
+beta
+
+```
+
+
+
+
+
+
+
+
+
+```{r}
+
+
+# Load necessary library
+library(dplyr)
+
+# Read the data
+# data <- read.csv("/mnt/data/housing.csv")
+
+# Prepare the data by ensuring no NA values
+data <- na.omit(data)
+
+# Add intercept to dataset
+data$Intercept <- 1
+
+# # Select predictors and response
+# X <- as.matrix(train_data[c("Intercept", "housing_median_age", "total_rooms", "total_bedrooms", "population", "households", "median_income")])
+# Y <- as.matrix(train_data$median_house_value)
+
+# Function to perform MLE regression
+mle_regression <- function(X, Y, max_iter = 100, tol = 1e-6) {
+  # Initialize beta (parameters)
+  beta <- matrix(0, ncol = 1, nrow = ncol(X))
+  
+  for (i in 1:max_iter) {
+    # Predicted values
+    Y_hat <- X %*% beta
+    # Residuals
+    residuals <- Y - Y_hat
+    # Score vector (gradient)
+    score <- t(X) %*% residuals
+    # Fisher information matrix (Under OLS assumptions, it's X'X)
+    fisher <- t(X) %*% X
+    # Parameter update
+    update <- solve(fisher) %*% score
+    # Update beta
+    beta <- beta + update
+    # Check for convergence
+    if (sqrt(sum(update^2)) < tol) {
+      break
+    }
+  }
+  return(beta)
+}
+
+# Run MLE regression
+beta_estimates <- mle_regression(X, Y)
+print(beta_estimates)
+
+# Compare with lm() model
+model <- lm(Y ~ X, data = train_data)
+print(summary(model)$coefficients)
+
+
+
+
+```
+
+
+
+```{r}
+
+
+# Get residuals and fitted values
+residuals <- residuals(model)
+fitted_values <- fitted(model)
+
+# QQ plot of residuals
+qqnorm(residuals)
+qqline(residuals, col = "red", lwd = 2)
+title("QQ Plot of Residuals")
+
+# Residuals vs. Fitted Values plot
+plot(fitted_values, residuals, xlab = "Fitted Values", ylab = "Residuals", main = "Residuals vs. Fitted Values")
+abline(h = 0, col = "red", lwd = 2)  # Horizontal line at zero
+# Assuming the variable 'residuals' contains the residuals of your model
+
+# Conduct the Shapiro-Wilk test for normality on residuals
+# Take a random sample of 5000 residuals
+set.seed(123)  # for reproducibility
+residuals_sample <- sample(residuals, 5000)
+
+# Run the Shapiro-Wilk test on the sample
+shapiro_test_result <- shapiro.test(residuals_sample)
+
+# Print the test results
+print(shapiro_test_result)
+
+
+# Print the test results
+print(shapiro_test_result)
+
+
+
+```
+
+
+
+**Making predictions**
+```{r}
+
+# Assuming the MLE model has been fitted and beta_estimates obtained as shown above
+
+# Extract predictors from the test data
+X_test <- data.matrix(test_data[, -which(names(test_data) == "median_house_value")])
+
+# Scale test data using training data parameters
+train_mean <- attr(X, "scaled:center")  # assuming X is the scaled training predictors
+train_sd <- attr(X, "scaled:scale")
+
+# Apply scaling
+# X_test <- scale(X_test, center = train_mean, scale = train_sd)
+
+# Add intercept to test data
+X_test <- cbind(rep(1, nrow(X_test)), X_test)
+length(X_test)
+# Predict Y using the fitted model on test data
+Y_test <- test_data$median_house_value
+predictions <- X_test %*% beta_estimates
+length(predictions)
+length(Y_test)
+# Calculate Mean Squared Error (MSE) to evaluate predictions
+mse <- mean((predictions - Y_test)^2)
+print(paste("Mean Squared Error on Test Data:", mse))
+
+# Calculate Root Mean Squared Error (RMSE) for a more interpretable metric
+rmse <- sqrt(mse)
+print(paste("Root Mean Squared Error on Test Data:", rmse))
+
+
+
+```
+
+
+```{r}
+
+# You may need to adjust the formula depending on your specific predictors
+# model <- multinom(symboling ~ ., data = trainData)
+# 
+# Summarize the model
+# summary(model)
+
+# Predict on test data
+# predictions <- predict(model, newdata = X_test)
+
+
+
+```
+
+
+
+
+
+
+```{r}
+
+
+# Function to perform bootstrapping and model fitting
+bootstrap_and_fit <- function(X, Y, num_resamples = 100) {
+  boot_results <- matrix(0, ncol = ncol(X), nrow = num_resamples)
+  
+  for (i in 1:num_resamples) {
+    # Bootstrap sample
+    indices <- sample(nrow(X), replace = TRUE)
+    boot_X <- X[indices, ]
+    boot_Y <- Y[indices]
+    
+    # Fit MLE regression model on bootstrap sample
+    beta_estimates <- mle_regression(boot_X, boot_Y)
+    
+    # Store the fitted coefficients
+    boot_results[i, ] <- t(beta_estimates)
+  }
+  
+  return(boot_results)
+}
+
+# Perform the bootstrapping
+bootstrap_estimates <- bootstrap_and_fit(X, Y)
+
+# Calculate summary statistics from the bootstrap results
+beta_means <- colMeans(bootstrap_estimates)
+print("Bootstrap Mean Estimates:")
+print(beta_means)
+
+
+
+
+
+```
+
+
+
+
+**bootstrap using built-in function**
+```{r}
+library(boot)  # for bootstrap sampling
+
+
+# Split data into training and testing sets
+set.seed(123)  # for reproducibility
+train_indices <- sample(1:nrow(data), 0.8 * nrow(data))  # 80% for training, adjust as needed
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+
+# Fit linear regression model
+# lm_model <- lm(Y ~ X, data = train_data)  # adjust formula as per your predictors
+
+# Bootstrap sampling for coefficient estimation
+boot_results <- boot(train_data, function(train_data, indices) {
+  fit <- lm(median_house_value ~ ., data = train_data[indices, ])
+  return(coef(fit))
+}, R = 100)
+
+# View the bootstrapped results
+print(boot_results)
+
+# Maximum Likelihood Estimates
+ml_estimates <- coef(lm_model)
+
+# Make predictions
+predictions <- predict(lm_model, newdata = test_data)
+
+# Evaluate model performance (e.g., MSE)
+mse <- mean((test_data$median_house_value - predictions)^2)
+
+# Print results
+# print(ml_estimates)
+# print(summary(lm_model))
+# print(mse)
+
+
+
+```
+
+
+
+
+```{r}
+
+# Split data into training and testing sets
+set.seed(123)
+train_indices <- sample(1:nrow(data), 0.8 * nrow(data), replace = FALSE)
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+
+# Example Model: Linear Regression using custom MLE function
+# Assuming mle_regression is defined as previously described
+beta_estimates <- mle_regression(as.matrix(train_data[-ncol(train_data)]), as.matrix(train_data$median_house_value))
+
+# Predict on test data
+test_data$predicted <- as.matrix(test_data[-ncol(test_data)]) %*% beta_estimates
+
+# # Calculate Mean Squared Error for evaluation
+# mse <- mean((test_data$predicted - test_data$median_house_value)^2)
+# print(paste("Mean Squared Error on Test Data:", mse))
+# 
+# # Calculate Root Mean Squared Error
+# rmse <- sqrt(mse)
+# print(paste("Root Mean Squared Error on Test Data:", rmse))
+# 
+# # Calculate R-squared
+# ss_total <- sum((test_data$median_house_value - mean(test_data$median_house_value))^2)
+# ss_res <- sum((test_data$median_house_value - test_data$predicted)^2)
+# r_squared <- 1 - (ss_res / ss_total)
+# print(paste("R-squared on Test Data:", r_squared))
+
+# Print beta coefficients
+print("Coefficients from MLE Regression:")
+print(beta_estimates)
+
+
+
+```
+
+
+
+
+
